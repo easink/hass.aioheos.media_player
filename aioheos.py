@@ -1,34 +1,30 @@
 """
 Denon Heos notification service.
 """
-from heos import Heos, HeosException
+import asyncio
 
 import logging
 import voluptuous as vol
-
-        # PLATFORM_SCHEMA, SUPPORT_NEXT_TRACK, SUPPORT_PAUSE, SUPPORT_PREVIOUS_TRACK,
-        # SUPPORT_TURN_OFF, SUPPORT_TURN_ON, SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET,
 
 from homeassistant.components.media_player import (
         PLATFORM_SCHEMA, MEDIA_TYPE_MUSIC,
         SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
         SUPPORT_STOP, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
-        SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK,
+        SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK, SUPPORT_SEEK,
         MediaPlayerDevice)
 from homeassistant.const import (CONF_HOST, CONF_NAME,
         STATE_IDLE, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
 import homeassistant.helpers.config_validation as cv
 
-# REQUIREMENTS = ['https://github.com/easink/heos/archive/v0.1.4.zip#heos==0.1.4']
-REQUIREMENTS = ['git+https://github.com/easink/heos@dev#egg-heos',
-                'lxml', 'httplib2']
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1'
+                'lxml', 'aiohttp']
+# REQUIREMENTS = ['git+https://github.com/easink/heos@dev#egg-heos',
 
 DEFAULT_NAME = 'HEOS Player'
 
 SUPPORT_HEOS = SUPPORT_STOP | SUPPORT_PAUSE | SUPPORT_PLAY_MEDIA | \
-        SUPPORT_VOLUME_MUTE | SUPPORT_VOLUME_SET
-
-# SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK | \
+        SUPPORT_PREVIOUS_TRACK | SUPPORT_NEXT_TRACK | \
+        SUPPORT_VOLUME_MUTE | SUPPORT_VOLUME_SET | SUPPORT_SEEK
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_HOST): cv.string,
@@ -37,52 +33,45 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 _LOGGER = logging.getLogger(__name__)
 
-def setup_platform(hass, config, add_devices, discover_info=None):
+from aioheos import AioHeos, AioHeosException
+
+@asyncio.coroutine
+def async_setup_platform(hass, config, async_add_devices, discover_info=None):
     """Setup the HEOS platform."""
 
     host = config.get(CONF_HOST)
     name = config.get(CONF_NAME)
 
-    heos = HeosMediaPlayer(host, name)
-    if heos:
-        add_devices([heos])
-        return True
-    else:
-        return False
+    heos = HeosMediaPlayer(hass, host, name)
+    yield from heos._heos.connect()
+    heos._heos.register_pretty_json(False)
+    heos._heos.request_players()
+    hass.loop.create_task(heos._heos.event_loop(heos.async_update_ha_state))
+    heos._heos.register_for_change_events()
+
+    yield from async_add_devices([heos])
+    return True
 
 
 class HeosMediaPlayer(MediaPlayerDevice):
     """ The media player ."""
 
-    def __init__(self, host, name):
+    def __init__(self, hass, host, name):
         """Initialize"""
         if host is None:
             _LOGGER.info('No host provided, will try to discover...')
-        self._heos = Heos(host, verbose=True)
-        self._heos.close()
+        self._hass = hass
+        self._heos = AioHeos(loop=hass.loop, host=host, verbose=True)
         self._name = name
-        self._volume = 0
-        self._muted = 'off'
-        self._mediasource = ''
-        self._state = STATE_UNKNOWN
-        self._media_artist = ''
-        self._media_album = ''
-        self._media_title = ''
-        self._media_image_url = ''
-        self._media_id = ''
+        # self.update()
 
-        self.update()
-
-    def update(self):
+    @asyncio.coroutine
+    def async_update(self):
         """Retrieve latest state."""
-        self._heos.connect()
-
-        self._get_playing_media()
-        self._state = self._heos.get_play_state()
-        self._volume = self._heos.get_volume()
-        self._muted = self._heos.get_mute_state()
-
-        self._heos.close()
+        self._heos.request_play_state()
+        self._heos.request_mute_state()
+        self._heos.request_volume()
+        self._heos.request_now_playing_media()
         return True
 
     @property
@@ -93,10 +82,12 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def volume_level(self):
         """Volume level of the device (0..1)."""
-        return int(self._volume) / 100.0
+        volume = self._heos.get_volume()
+        return int(volume) / 100.0
 
     @property
     def state(self):
+        self._state = self._heos.get_play_state()
         if self._state == 'stop':
             return STATE_OFF
         elif self._state == 'pause':
@@ -114,42 +105,41 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def media_artist(self):
         """Artist of current playing media."""
-        return self._media_artist
+        return self._heos.get_media_artist()
 
     @property
     def media_title(self):
         """Album name of current playing media."""
-        return self._media_title
+        return self._heos.get_media_song()
 
     @property
     def media_album_name(self):
         """Album name of current playing media."""
-        return self._media_album
+        return self._heos.get_media_album()
 
     @property
     def media_image_url(self):
         """Return the image url of current playing media."""
-        return self._media_image_url
+        return self._heos.get_media_image_url()
 
     @property
     def media_content_id(self):
         """Return the content ID of current playing media."""
-        return self._media_id
+        return self._heos.get_media_id()
 
     @property
     def is_volume_muted(self):
         """Boolean if volume is currently muted."""
-        if self._muted == 'on':
+        muted_state = self._heos.get_mute_state()
+        if muted_state == 'on':
             return True
         else:
             return False
 
     def mute_volume(self, mute):
         """Mute volume"""
-        self._heos.connect()
         self._heos.toggle_mute()
-        self._heos.close()
-        self.update_ha_state()
+        # self.update_ha_state()
 
     def _get_playing_media(self):
         reply = self._heos.get_now_playing_media()
@@ -175,75 +165,50 @@ class HeosMediaPlayer(MediaPlayerDevice):
         if 'mid' in reply.keys():
             self._media_id = reply['mid']
 
-    # @property
-    # def media_duration(self):
-    #     """Duration of current playing media in seconds."""
-    #     return self._media_duration
+    @property
+    def media_duration(self):
+        """Duration of current playing media in seconds."""
+        return self._heos.get_duration()[0]/1000
 
-    # def media_next_track(self):
-    #     """Go TO next track."""
-    #     self._heos.connect()
-    #     self._heos.play_next()
-    #     self._heos.close()
+    def media_next_track(self):
+        """Go TO next track."""
+        self._heos.request_play_next()
 
-    # def media_next_track(self):
-    #     """Go TO next track."""
-    #     self._heos.connect()
-    #     self._heos.play_prev()
-    #     self._heos.close()
+    def media_previous_track(self):
+        """Go TO next track."""
+        self._heos.request_play_previous()
+
+    def media_seek(self, position):
+        pass
 
     @property
     def supported_media_commands(self):
         """Flag of media commands that are supported."""
         return SUPPORT_HEOS
 
-    # def turn_off(self):
-    #     """Turn off media player."""
-
-    # def volume_up(self):
-    #     """Volume up media player."""
-    #     # self._heos.connect()
-    #     # self._heos.volume_level_up()
-    #     # self._heos.close()
-    #     pass
-
-    # def volume_down(self):
-    #     """Volume down media player."""
-    #     # self._heos.connect()
-    #     # self._heos.volume_level_down()
-    #     # self._heos.close()
-    #     pass
-
     def set_volume_level(self, volume):
         """Set volume level, range 0..1."""
-        self._heos.connect()
         # 60 of 100 will be max
         self._heos.set_volume(volume * 100)
-        self._heos.close()
 
     def media_play(self):
         """Play media player."""
-        self._heos.connect()
         self._heos.play()
-        self._heos.close()
-        self.update_ha_state()
+        # self.update_ha_state()
 
     def media_stop(self):
         """Stop media player."""
-        self._heos.connect()
         self._heos.stop()
-        self._heos.close()
-        self.update_ha_state()
+        # self.update_ha_state()
 
     def media_pause(self):
         """Pause media player."""
-        self._heos.connect()
         self._heos.pause()
-        self._heos.close()
-        self.update_ha_state()
+        # self.update_ha_state()
 
-    # def media_next_track(self):
-    #     """Send the next track command."""
-
-    # def media_previous_track(self):
-    #     """Send the previous track command."""
+    def media_play_pause(self):
+        """Play or pause the media player."""
+        if self._state == 'play':
+            self.media_pause()
+        else:
+            self.media_play()

@@ -1,11 +1,15 @@
-# hass.heos.media_player
+# hass.aioheos.media_player
 
-Denon Heos media player for Home Assistant
-
-## docs
-
-https://usa.denon.com/DocumentMaster/us/HEOS_CLI_PROTOCOL_Specification_290616.pdf
+Denon Heos media player for Home Assistant.
 
 ## install
 
+    > cp aioheos.py ~/.homeassistant/custom_component/
+
+## configuration
+
+    media_player:
+        platform: aioheos
+        host: <hostname>
+        name: Name of the device
 
