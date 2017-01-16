@@ -16,9 +16,11 @@ from homeassistant.const import (CONF_HOST, CONF_NAME,
         STATE_IDLE, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
 import homeassistant.helpers.config_validation as cv
 
-REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1'
+# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1']
+# REQUIREMENTS = ['git+https://github.com/easink/aioheos.git@v0.0.1#egg-aioheos==0.0.1',
+# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1',
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
                 'lxml', 'aiohttp']
-# REQUIREMENTS = ['git+https://github.com/easink/heos@dev#egg-heos',
 
 DEFAULT_NAME = 'HEOS Player'
 
@@ -136,7 +138,8 @@ class HeosMediaPlayer(MediaPlayerDevice):
         else:
             return False
 
-    def mute_volume(self, mute):
+    @asyncio.coroutine
+    def async_mute_volume(self, mute):
         """Mute volume"""
         self._heos.toggle_mute()
         # self.update_ha_state()
@@ -168,45 +171,65 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def media_duration(self):
         """Duration of current playing media in seconds."""
-        return self._heos.get_duration()[0]/1000
+        return self._heos.get_duration()/1000
 
-    def media_next_track(self):
+    @property
+    def media_position_updated_at(self):
+        return self._heos.get_position_updated_at()
+
+    @property
+    def media_position(self):
+        return self._heos.get_position()
+
+    @asyncio.coroutine
+    def async_media_next_track(self):
         """Go TO next track."""
         self._heos.request_play_next()
 
-    def media_previous_track(self):
+    @asyncio.coroutine
+    def async_media_previous_track(self):
         """Go TO next track."""
         self._heos.request_play_previous()
 
-    def media_seek(self, position):
-        pass
+    @property
+    def media_seek_position(self):
+        raise NotImplementedError()
+
+    @asyncio.coroutine
+    def async_media_seek(self, position):
+        print('MEDIA SEEK', position)
 
     @property
     def supported_media_commands(self):
         """Flag of media commands that are supported."""
         return SUPPORT_HEOS
 
-    def set_volume_level(self, volume):
+    @asyncio.coroutine
+    def async_set_volume_level(self, volume):
         """Set volume level, range 0..1."""
         # 60 of 100 will be max
         self._heos.set_volume(volume * 100)
 
-    def media_play(self):
+    @asyncio.coroutine
+    def async_media_play(self):
         """Play media player."""
         self._heos.play()
         # self.update_ha_state()
 
-    def media_stop(self):
+    @asyncio.coroutine
+    def async_media_stop(self):
         """Stop media player."""
         self._heos.stop()
         # self.update_ha_state()
 
-    def media_pause(self):
+    @asyncio.coroutine
+    def async_media_pause(self):
         """Pause media player."""
         self._heos.pause()
         # self.update_ha_state()
 
-    def media_play_pause(self):
+    @asyncio.coroutine
+    def async_media_play_pause(self):
         """Play or pause the media player."""
         if self._state == 'play':
             self.media_pause()
