@@ -18,8 +18,8 @@ import homeassistant.helpers.config_validation as cv
 
 # REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1']
 # REQUIREMENTS = ['git+https://github.com/easink/aioheos.git@v0.0.1#egg-aioheos==0.0.1',
-# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1',
-REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
+# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.2.zip#aioheos==0.0.2',
                 'lxml', 'aiohttp']
 
 DEFAULT_NAME = 'HEOS Player'
