@@ -85,7 +85,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
     def volume_level(self):
         """Volume level of the device (0..1)."""
         volume = self._heos.get_volume()
-        return int(volume) / 100.0
+        return float(volume) / 100.0
 
     @property
     def state(self):
