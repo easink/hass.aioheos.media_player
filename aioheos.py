@@ -11,7 +11,7 @@ from homeassistant.components.media_player import (
         SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
         SUPPORT_STOP, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
         SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK, SUPPORT_SEEK,
-        MediaPlayerDevice)
+        SUPPORT_PLAY, MediaPlayerDevice)
 from homeassistant.const import (CONF_HOST, CONF_NAME,
         STATE_IDLE, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
 import homeassistant.helpers.config_validation as cv
@@ -19,12 +19,11 @@ import homeassistant.helpers.config_validation as cv
 # REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1']
 # REQUIREMENTS = ['git+https://github.com/easink/aioheos.git@v0.0.1#egg-aioheos==0.0.1',
 # REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
-REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.3.zip#aioheos==0.0.3',
-                'lxml', 'aiohttp']
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.3.zip#aioheos==0.0.3']
 
 DEFAULT_NAME = 'HEOS Player'
 
-SUPPORT_HEOS = SUPPORT_STOP | SUPPORT_PAUSE | SUPPORT_PLAY_MEDIA | \
+SUPPORT_HEOS = SUPPORT_PLAY | SUPPORT_STOP | SUPPORT_PAUSE | SUPPORT_PLAY_MEDIA | \
         SUPPORT_PREVIOUS_TRACK | SUPPORT_NEXT_TRACK | \
         SUPPORT_VOLUME_MUTE | SUPPORT_VOLUME_SET | SUPPORT_SEEK
 
@@ -171,7 +170,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def media_duration(self):
         """Duration of current playing media in seconds."""
-        return self._heos.get_duration()/1000
+        return self._heos.get_duration()/1000.0
 
     @property
     def media_position_updated_at(self):
@@ -179,7 +178,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
 
     @property
     def media_position(self):
-        return self._heos.get_position()
+        return self._heos.get_position()/1000.0
 
     @asyncio.coroutine
     def async_media_next_track(self):
@@ -191,16 +190,12 @@ class HeosMediaPlayer(MediaPlayerDevice):
         """Go TO next track."""
         self._heos.request_play_previous()
 
-    @property
-    def media_seek_position(self):
-        raise NotImplementedError()
-
     @asyncio.coroutine
     def async_media_seek(self, position):
         print('MEDIA SEEK', position)
 
     @property
-    def supported_media_commands(self):
+    def supported_features(self):
         """Flag of media commands that are supported."""
         return SUPPORT_HEOS
 
