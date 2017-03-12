@@ -7,19 +7,19 @@ import logging
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-        PLATFORM_SCHEMA, MEDIA_TYPE_MUSIC,
-        SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
-        SUPPORT_STOP, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
-        SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK, SUPPORT_SEEK,
-        SUPPORT_PLAY, MediaPlayerDevice)
-from homeassistant.const import (CONF_HOST, CONF_NAME,
-        STATE_IDLE, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
+    PLATFORM_SCHEMA, MEDIA_TYPE_MUSIC,
+    SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
+    SUPPORT_STOP, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
+    SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK, SUPPORT_SEEK,
+    SUPPORT_PLAY, MediaPlayerDevice)
+from homeassistant.const import (
+    CONF_HOST, CONF_NAME, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
 import homeassistant.helpers.config_validation as cv
 
 # REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1']
 # REQUIREMENTS = ['git+https://github.com/easink/aioheos.git@v0.0.1#egg-aioheos==0.0.1',
 # REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
-REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.3.zip#aioheos==0.0.3']
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.1.2.zip#aioheos==0.1.2']
 
 DEFAULT_NAME = 'HEOS Player'
 
@@ -44,11 +44,10 @@ def async_setup_platform(hass, config, async_add_devices, discover_info=None):
     name = config.get(CONF_NAME)
 
     heos = HeosMediaPlayer(hass, host, name)
-    yield from heos._heos.connect()
-    heos._heos.register_pretty_json(False)
-    heos._heos.request_players()
-    hass.loop.create_task(heos._heos.event_loop(heos.async_update_ha_state))
-    heos._heos.register_for_change_events()
+    yield from heos.heos.connect(
+        host=host,
+        trigger_callback=heos.async_update_ha_state
+        )
 
     yield from async_add_devices([heos])
     return True
@@ -62,17 +61,23 @@ class HeosMediaPlayer(MediaPlayerDevice):
         if host is None:
             _LOGGER.info('No host provided, will try to discover...')
         self._hass = hass
-        self._heos = AioHeos(loop=hass.loop, host=host, verbose=True)
+        self.heos = AioHeos(loop=hass.loop, host=host, verbose=True)
         self._name = name
         # self.update()
+        self._state = None
+        self._media_artist = ''
+        self._media_album = ''
+        self._media_title = ''
+        self._media_image_url = ''
+        self._media_id = ''
 
     @asyncio.coroutine
     def async_update(self):
         """Retrieve latest state."""
-        self._heos.request_play_state()
-        self._heos.request_mute_state()
-        self._heos.request_volume()
-        self._heos.request_now_playing_media()
+        self.heos.request_play_state()
+        self.heos.request_mute_state()
+        self.heos.request_volume()
+        self.heos.request_now_playing_media()
         return True
 
     @property
@@ -83,12 +88,12 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def volume_level(self):
         """Volume level of the device (0..1)."""
-        volume = self._heos.get_volume()
+        volume = self.heos.get_volume()
         return float(volume) / 100.0
 
     @property
     def state(self):
-        self._state = self._heos.get_play_state()
+        self._state = self.heos.get_play_state()
         if self._state == 'stop':
             return STATE_OFF
         elif self._state == 'pause':
@@ -106,32 +111,32 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def media_artist(self):
         """Artist of current playing media."""
-        return self._heos.get_media_artist()
+        return self.heos.get_media_artist()
 
     @property
     def media_title(self):
         """Album name of current playing media."""
-        return self._heos.get_media_song()
+        return self.heos.get_media_song()
 
     @property
     def media_album_name(self):
         """Album name of current playing media."""
-        return self._heos.get_media_album()
+        return self.heos.get_media_album()
 
     @property
     def media_image_url(self):
         """Return the image url of current playing media."""
-        return self._heos.get_media_image_url()
+        return self.heos.get_media_image_url()
 
     @property
     def media_content_id(self):
         """Return the content ID of current playing media."""
-        return self._heos.get_media_id()
+        return self.heos.get_media_id()
 
     @property
     def is_volume_muted(self):
         """Boolean if volume is currently muted."""
-        muted_state = self._heos.get_mute_state()
+        muted_state = self.heos.get_mute_state()
         if muted_state == 'on':
             return True
         else:
@@ -140,11 +145,10 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @asyncio.coroutine
     def async_mute_volume(self, mute):
         """Mute volume"""
-        self._heos.toggle_mute()
-        # self.update_ha_state()
+        self.heos.toggle_mute()
 
     def _get_playing_media(self):
-        reply = self._heos.get_now_playing_media()
+        reply = self.heos.get_now_playing_media()
         # {
         #   "type" : "'song'",
         #   "song": "'song name'",
@@ -170,28 +174,29 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @property
     def media_duration(self):
         """Duration of current playing media in seconds."""
-        return self._heos.get_duration()/1000.0
+        return self.heos.get_duration()/1000.0
 
     @property
     def media_position_updated_at(self):
-        return self._heos.get_position_updated_at()
+        return self.heos.get_position_updated_at()
 
     @property
     def media_position(self):
-        return self._heos.get_position()/1000.0
+        return self.heos.get_position()/1000.0
 
     @asyncio.coroutine
     def async_media_next_track(self):
         """Go TO next track."""
-        self._heos.request_play_next()
+        self.heos.request_play_next()
 
     @asyncio.coroutine
     def async_media_previous_track(self):
-        """Go TO next track."""
-        self._heos.request_play_previous()
+        """Go TO previous track."""
+        self.heos.request_play_previous()
 
     @asyncio.coroutine
     def async_media_seek(self, position):
+        """Seek to posistion."""
         print('MEDIA SEEK', position)
 
     @property
@@ -203,24 +208,24 @@ class HeosMediaPlayer(MediaPlayerDevice):
     def async_set_volume_level(self, volume):
         """Set volume level, range 0..1."""
         # 60 of 100 will be max
-        self._heos.set_volume(volume * 100)
+        self.heos.set_volume(volume * 100)
 
     @asyncio.coroutine
     def async_media_play(self):
         """Play media player."""
-        self._heos.play()
+        self.heos.play()
         # self.update_ha_state()
 
     @asyncio.coroutine
     def async_media_stop(self):
         """Stop media player."""
-        self._heos.stop()
+        self.heos.stop()
         # self.update_ha_state()
 
     @asyncio.coroutine
     def async_media_pause(self):
         """Pause media player."""
-        self._heos.pause()
+        self.heos.pause()
         # self.update_ha_state()
 
     @asyncio.coroutine
