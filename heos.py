@@ -6,9 +6,9 @@ import asyncio
 import logging
 import voluptuous as vol
 
-from homeassistant.components.media_player import (
+from homeassistant.components.media_player import ( # pylint: disable=no-name-in-module
     PLATFORM_SCHEMA, MEDIA_TYPE_MUSIC,
-    SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
+    SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, # SUPPORT_VOLUME_STEP,
     SUPPORT_STOP, SUPPORT_PAUSE, SUPPORT_PLAY_MEDIA,
     SUPPORT_PREVIOUS_TRACK, SUPPORT_NEXT_TRACK, SUPPORT_SEEK,
     SUPPORT_PLAY, MediaPlayerDevice)
@@ -16,10 +16,7 @@ from homeassistant.const import (
     CONF_HOST, CONF_NAME, STATE_PAUSED, STATE_PLAYING, STATE_UNKNOWN, STATE_OFF)
 import homeassistant.helpers.config_validation as cv
 
-# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.0.1.zip#aioheos==0.0.1']
-# REQUIREMENTS = ['git+https://github.com/easink/aioheos.git@v0.0.1#egg-aioheos==0.0.1',
-# REQUIREMENTS = ['https://github.com/easink/aioheos/archive/master.zip#aioheos==0.0.1',
-REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.1.2.zip#aioheos==0.1.2']
+REQUIREMENTS = ['https://github.com/easink/aioheos/archive/v0.1.3.zip#aioheos==0.1.3']
 
 DEFAULT_NAME = 'HEOS Player'
 
@@ -34,27 +31,33 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 _LOGGER = logging.getLogger(__name__)
 
-from aioheos import AioHeos, AioHeosException
+# from aioheos import AioHeos, AioHeosException
+from aioheos import AioHeos # pylint: disable=wrong-import-position
 
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discover_info=None):
+    # pylint: disable=unused-argument
     """Setup the HEOS platform."""
 
     host = config.get(CONF_HOST)
     name = config.get(CONF_NAME)
 
+    hass.loop.set_debug(True)
     heos = HeosMediaPlayer(hass, host, name)
+
     yield from heos.heos.connect(
         host=host,
-        trigger_callback=heos.async_update_ha_state
+        callback=heos.async_update_ha_state
         )
 
-    yield from async_add_devices([heos])
-    return True
+    async_add_devices([heos])
 
 
 class HeosMediaPlayer(MediaPlayerDevice):
     """ The media player ."""
+    # pylint: disable=abstract-method
+    # pylint: disable=too-many-public-methods
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, hass, host, name):
         """Initialize"""
@@ -63,13 +66,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
         self._hass = hass
         self.heos = AioHeos(loop=hass.loop, host=host, verbose=True)
         self._name = name
-        # self.update()
         self._state = None
-        self._media_artist = ''
-        self._media_album = ''
-        self._media_title = ''
-        self._media_image_url = ''
-        self._media_id = ''
 
     @asyncio.coroutine
     def async_update(self):
@@ -102,6 +99,11 @@ class HeosMediaPlayer(MediaPlayerDevice):
             return STATE_PLAYING
         else:
             return STATE_UNKNOWN
+
+    @property
+    def should_poll(self):
+        """No polling needed."""
+        return False
 
     @property
     def media_content_type(self):
@@ -137,39 +139,12 @@ class HeosMediaPlayer(MediaPlayerDevice):
     def is_volume_muted(self):
         """Boolean if volume is currently muted."""
         muted_state = self.heos.get_mute_state()
-        if muted_state == 'on':
-            return True
-        else:
-            return False
+        return muted_state == 'on'
 
     @asyncio.coroutine
-    def async_mute_volume(self, mute):
+    def async_mute_volume(self, mute): # pylint: disable=unused-argument
         """Mute volume"""
         self.heos.toggle_mute()
-
-    def _get_playing_media(self):
-        reply = self.heos.get_now_playing_media()
-        # {
-        #   "type" : "'song'",
-        #   "song": "'song name'",
-        #   "album": "'album name'",
-        #   "artist": "'artist name'",
-        #   "image_url": "'image url'",
-        #   "mid": "'media id'",
-        #   "qid": "'queue id'",
-        #   "sid": source_id
-        #   "album_id": "Album Id'"
-        # }
-        if 'artist' in reply.keys():
-            self._media_artist = reply['artist']
-        if 'album' in reply.keys():
-            self._media_album = reply['album']
-        if 'song' in reply.keys():
-            self._media_title = reply['song']
-        if 'image_url' in reply.keys():
-            self._media_image_url = reply['image_url']
-        if 'mid' in reply.keys():
-            self._media_id = reply['mid']
 
     @property
     def media_duration(self):
@@ -196,6 +171,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
 
     @asyncio.coroutine
     def async_media_seek(self, position):
+        # pylint: disable=no-self-use
         """Seek to posistion."""
         print('MEDIA SEEK', position)
 
@@ -207,31 +183,27 @@ class HeosMediaPlayer(MediaPlayerDevice):
     @asyncio.coroutine
     def async_set_volume_level(self, volume):
         """Set volume level, range 0..1."""
-        # 60 of 100 will be max
         self.heos.set_volume(volume * 100)
 
     @asyncio.coroutine
     def async_media_play(self):
         """Play media player."""
         self.heos.play()
-        # self.update_ha_state()
 
     @asyncio.coroutine
     def async_media_stop(self):
         """Stop media player."""
         self.heos.stop()
-        # self.update_ha_state()
 
     @asyncio.coroutine
     def async_media_pause(self):
         """Pause media player."""
         self.heos.pause()
-        # self.update_ha_state()
 
     @asyncio.coroutine
     def async_media_play_pause(self):
         """Play or pause the media player."""
         if self._state == 'play':
-            self.media_pause()
+            yield from self.async_media_pause()
         else:
-            self.media_play()
+            yield from self.async_media_play()
