@@ -9,7 +9,7 @@ Denon Heos media player for Home Assistant.
 ## configuration
 
     media_player:
-        platform: aioheos
+        platform: heos
         host: <hostname>
         name: Name of the device
 
