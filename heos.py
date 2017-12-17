@@ -32,7 +32,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 _LOGGER = logging.getLogger(__name__)
 
 # from aioheos import AioHeos, AioHeosException
-from aioheos import AioHeos # pylint: disable=wrong-import-position
+#from aioheos import AioHeos # pylint: disable=wrong-import-position
 
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discover_info=None):
@@ -61,6 +61,7 @@ class HeosMediaPlayer(MediaPlayerDevice):
 
     def __init__(self, hass, host, name):
         """Initialize"""
+        from aioheos import AioHeos
         if host is None:
             _LOGGER.info('No host provided, will try to discover...')
         self._hass = hass
